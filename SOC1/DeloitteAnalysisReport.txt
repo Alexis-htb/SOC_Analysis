@@ -1,0 +1,38 @@
+I) ANALYSE DES FAITS CHRONOLOGIQUES SUSPECTS
+
+On peut voir un authorizedUserId assez similaire entre notre suspect (192.168.0.101) et une potentielle victime (192.168.0.41), à savoir mdB7yD2dp1BFZPontHBQej pour la victime et mdB7yD2dp1BFZPontHBQ1Z pour le suspect.
+
+De plus, le suspect, en plus d'avoir un id similaire possède, également toutes les requêtes de la victime à l'identique, en particulier les timestamps de chacune des requêtes de la victime.
+
+Une fois que la victime s'est arrêtée de faire de requêtes, le suspect parvient à regarder l'Etat des machines de 4 sites OT différents en moins d'une seconde, puisque le timestamp n'a pas bougé entre chacune des 4 requêtes API, exploit qu'il réalise toutes les heures aux heures piles, c'est-à-dire à 17h00m48s puis 18h00m48s et ainsi de suite. Ceci suggère vivement l'usage d'un script.
+
+Voici les 4 requêtes exécutées chaque heure : 
+
+2021-06-25T17:00:48.000Z GET    "/api/factory/machine/status?factory=meiyo&machine=*" {authorizedUserId: "mdB7yD2dp1BFZPontHBQ1Z"}              200 (SUCCESS)     
+2021-06-25T17:00:48.000Z GET    "/api/factory/machine/status?factory=seiko&machine=*" {authorizedUserId: "mdB7yD2dp1BFZPontHBQ1Z"}              200 (SUCCESS)     
+2021-06-25T17:00:48.000Z GET    "/api/factory/machine/status?factory=shenzhen&machine=*" {authorizedUserId: "mdB7yD2dp1BFZPontHBQ1Z"}           200 (SUCCESS)     
+2021-06-25T17:00:48.000Z GET    "/api/factory/machine/status?factory=berlin&machine=*" {authorizedUserId: "mdB7yD2dp1BFZPontHBQ1Z"}             200 (SUCCESS)
+
+Ce script dure de 17h00m48s à 23h00m48s sans interruptions, jusqu'au nouveau jour, soit 00h00m48s, où les requêtes passent en status 401, c'est-à-dire non autorisés. Ces requêtes non autorisées continuent chaque heure jusqu'à 16h, car à 16h04 on voit une tentative de reconnexion par le suspect qui aboutit, pour enfin permettre à son script de fonctionner à nouveau, à 17h00, la même heure à laquelle le script avait été initialisé pour la première fois la veille.
+
+Enfin le script continue comme avant, mais s'arrête cette fois-ci à 21h00, sans vraiment plus d'explications, ce sera la dernière requête de l'ip suspecte.
+
+II) CONCLUSION ET HYPOTHÈSE
+
+En conclusion, bien qu'un attaquant ne puisse pas accéder directement au dashboard car cela appartient à l'intranet de l'entreprise, il est possible d'y accéder malgré tout par le biais du vpn interne, ce qui semble avoir été fait au vu de l'activité suspecte de l'ip "192.168.0.101". On peut imaginer, mais ce n'est qu'une théorie, que l'attaquant a fait un clonage de la session de l'ip "192.168.0.41" comme pourrait le suggérer la similitude entre les deux IDs, sûrement dû à la méthode cryptographique utilisée, prenant probablement en compte plusieurs paramètres unique à une session, ce qui générerait le premier bout ("mdB7yD2dp1BFZPontHBQ"), ainsi que quelque chose d'unique pour chacun, comme par exemple l'ip, ce qui distinguerait les deux tokens. On peut suggérer également l'usage d'une attaque par rejeu afin de se faire passer pour une session légitime. On peut le supposer en raison des requêtes identiques entre les deux sessions jusqu'à la dernière requête de la victime. Une fois ceci fait, l'attaquant utilise un script qui vérifie à chaque heure l'état des machines de chaque site, script qui s'est fait bloqué dès l'expiration de son token, expiration qui prend fin à 16h04 lorsque l'on aperçoit une tentative de reconnexion, ce qui suggère une intervention humaine, ainsi le script a pu reprendre son activité à 17h00m48s, exactement la même heure que la première exécution du script. Le script s'arrêtera définitivement à 21h00m48s. Il reste cependant nécessaire de préciser que le script ne semble que simplement vérifier l'état des machines de chaque site, sans pour autant faire de tentatives d'entrave, c'est du moins ce que l'on peut estimer si l'on se base sur les appels de l'API enregistrés dans le fichier log auquel nous avons eu accès. Ainsi donc ce script semble ne se placer qu'exclusivement dans une optique de reconnaissance du point de vue de la killchain.
+
+III) SOLUTIONS
+
+1) Actions immédiates :
+-Bloquer l'ip "192.168.0.101"
+-Révoquer chacun de ses droits d'accès et d'utilisateur
+-Obliger la victime ("192.168.0.41") à changer de mot de passe
+
+2) Actions de préventions:
+Améliorer le système de détection en ajoutant des règles, voici celles que je peux proposer :
+
+1- Ajouter une règle concernant les requêtes ayant des timestamps similaires, comme "2021-06-25T17:00:48.000Z" et "2021-06-25T18:00:48.000Z", car cela relève quasiment exclusivement de l'exécution d'un script de réaliser une telle prouesse.
+
+2- Ajouter une règle de détection concernant un utilisateur réalisant plusieurs appels API dans la même seconde, car cela aussi relève quasiment exclusivement de l'usage d'un script.
+
+3- Troisième règle et pour moi la plus importante : il est possible que votre entreprise cherche également à avoir recours à l'utilisation de scripts et que les deux précédentes règles en contraignent vos propres usages, ce qui n'est pas le but recherché. Ainsi ajouter une règle qui permettrait de faire une alerte lorsque deux utilisateurs normalement différents réalisent les mêmes requêtes aux mêmes timestamps, ainsi que de remonter une alerte lorsque deux IDs sont trop similaires comme c'est le cas ici afin de prévenir d'un clonage de session par un utilisateur malveillant.
